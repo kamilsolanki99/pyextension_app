@@ -206,7 +206,8 @@ def generate_stamp(driver):
             df = read_stamp_data()
 
             if df is not None:
-                try:                    # Define all mandatory fields with their IDs
+                try:
+                    # Define all mandatory fields with their IDs
                     mandatory_fields = {
                         "Purchased_by": "TextField6Mand",
                         "Description": "TextArea8Mand",
@@ -216,16 +217,22 @@ def generate_stamp(driver):
                         "First_Party_Mobile": "fpMobNo",
                         "Second_Party_Mobile": "spMobNo",
                         "Stamp_Duty_Amount": "TextField28Mand"
-                    }                    # Get data from Excel if available
-                    row_data = {}
-                    if df is not None:
-                        row = df.iloc[0]
+                    }
+
+                    # Check if we have enough rows in Excel
+                    if stamp_num < len(df):
+                        row = df.iloc[stamp_num]  # Get row based on current stamp number
+                        print(f"\n>>> Using data from Excel row {stamp_num + 1}")
+                        row_data = {}
                         for col_name in mandatory_fields.keys():
                             value = row.get(col_name, "")
                             # Handle NaN values
                             if pd.isna(value):
                                 value = ""
                             row_data[col_name] = str(value).strip()
+                    else:
+                        print(f"\n>>> Warning: No data found in Excel for stamp {stamp_num + 1}")
+                        row_data = {col_name: "" for col_name in mandatory_fields.keys()}
 
                     # Fill all mandatory fields (with data or blank)
                     for field_name, element_id in mandatory_fields.items():
@@ -238,8 +245,8 @@ def generate_stamp(driver):
                             field.clear()
                             time.sleep(0.01)
                             
-                            # Use Excel data if available, otherwise leave blank
-                            value = row_data.get(field_name, "") if row_data else ""
+                            # Use Excel data if available
+                            value = row_data.get(field_name, "")
                             field.send_keys(value)
                             
                             if value:
