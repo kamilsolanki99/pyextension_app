@@ -52,7 +52,7 @@ def launch_browser():
 
     url = "https://www.shcilestamp.com/eStampIndia/useradmin/UserAdminLoginServlet?rDoAction=LoadLoginPage"
     user_id = "gjdpipati"
-    password = "Ddpkm@2015"
+    password = "Ddpkm@2016"
 
     try:
         driver = setup_driver()
