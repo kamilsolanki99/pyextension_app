@@ -29,17 +29,31 @@ def print_stamp(driver):
         num_stamps = int(input("How many stamps do you want to print? "))
         print(f">>> You chose to print {num_stamps} stamps.")
 
+        # last_serial = load_last_serial()
+        # if last_serial:
+        #     use_last = input(f"Last used serial number was {last_serial}. Use next number? (y/n): ").lower()
+        #     if use_last == 'y':
+        #         start_serial = str(int(last_serial) + 1).zfill(5)
+        #         print(f">>> Using next serial number: {start_serial}")
+        #     else:
+        #         start_serial = input("Enter the last 5-digit serial number: ")
+        #         print(f">>> User entered serial number: {start_serial}")
+        # else:
+        #     start_serial = input("Enter the last 5-digit serial number: ")
+        #     print(f">>> No previous serial found. Starting with: {start_serial}")
+
         last_serial = load_last_serial()
         if last_serial:
-            use_last = input(f"Last used serial number was {last_serial}. Use next number? (y/n): ").lower()
-            if use_last == 'y':
-                start_serial = str(int(last_serial) + 1).zfill(5)
-                print(f">>> Using next serial number: {start_serial}")
+            next_serial = str(int(last_serial) + 1).zfill(5)
+            use_next = input(f"Next serial number is {next_serial}. Use it? (y/n): ").lower()
+            if use_next == 'y':
+                start_serial = next_serial
+                print(f">>> Using serial number: {start_serial}")
             else:
-                start_serial = input("Enter the last 5-digit serial number: ")
+                start_serial = input("Enter the 5-digit serial number to start with: ")
                 print(f">>> User entered serial number: {start_serial}")
         else:
-            start_serial = input("Enter the last 5-digit serial number: ")
+            start_serial = input("Enter the 5-digit serial number to start with: ")
             print(f">>> No previous serial found. Starting with: {start_serial}")
 
         if not start_serial.isdigit() or len(start_serial) != 5:
@@ -88,11 +102,11 @@ def print_stamp(driver):
             alert = WebDriverWait(driver, 5).until(EC.alert_is_present())
             alert.accept()
 
-            print(">>> Clicking on 'OK' button after alert...")
-            ok_button = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.NAME, "ackButton"))
-            )
-            ok_button.click()
+            # print(">>> Clicking on 'OK' button after alert...")
+            # ok_button = WebDriverWait(driver, 5).until(
+            #     EC.element_to_be_clickable((By.NAME, "ackButton"))
+            # )
+            # ok_button.click()
 
             print(">>> Clicking on 'Final Print' button...")
             final_print_button = WebDriverWait(driver, 5).until(
@@ -100,13 +114,22 @@ def print_stamp(driver):
             )
             final_print_button.click()
 
-            print(">>> Entering serial number on form...")
-            serial_input = WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.ID, "serialNo"))
+            print(">>> Waiting for system to populate dynamic dropdown...")
+            WebDriverWait(driver, 10).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "#selectSl option")) > 1
             )
-            serial_input.clear()
-            serial_input.send_keys(str(current_serial).zfill(5))
 
+            select_element = driver.find_element(By.ID, "selectSl")
+            options = select_element.find_elements(By.TAG_NAME, "option")
+
+            for option in options:
+                value = option.get_attribute("value")
+                if value and "=" in value:
+                    actual_serial = value.split("=")[0]
+                    print(f"🖨️ Dynamic Serial Detected from Website: {actual_serial}")
+                    break
+
+            # ow click save
             print(">>> Clicking 'Save' to store the serial number...")
             save_button = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.NAME, "Save"))

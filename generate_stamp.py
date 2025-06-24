@@ -21,8 +21,8 @@ def read_stamp_data():
 
         df = pd.read_excel(excel_path)
         if df is not None and not df.empty:
-            print(">>> Excel file contents:")
-            print(df.head())
+            # print(">>> Excel file contents:")
+            # print(df.head())
             return df
         else:
             print(">>> Excel file is empty")
@@ -45,21 +45,38 @@ def handle_all_alerts(driver, max_alerts=3):
 def generate_stamp(driver):
     print(">>> Generating e-Stamp...")    
     
-    # Ask for number of stamps to generate
-    while True:
-        try:
-            num_stamps = int(input("How many stamps do you want to generate? "))
-            if num_stamps > 0:
-                break
-            else:
-                print("Please enter a positive number.")
-        except ValueError:
-            print("Please enter a valid number.")
-    
-    print(f">>> Will generate {num_stamps} stamps...")
-    
-    # Get stamp duty type and article choice once for all stamps
     try:
+        # Read Excel data first to check available rows
+        print("\n>>> Reading data from Excel...")
+        df = read_stamp_data()
+        if df is None:
+            print(">>> Error: Could not read Excel file")
+            return
+        
+        total_rows = len(df)
+        print(f">>> Found {total_rows} rows of data in Excel file")
+        
+        # Ask for number of stamps to generate
+        while True:
+            try:
+                num_stamps = int(input("How many stamps do you want to generate? "))
+                if num_stamps > 0:
+                    if num_stamps > total_rows:
+                        print(f"\n>>> Warning: You requested {num_stamps} stamps but only {total_rows} rows of data are available in Excel.")
+                        print(f">>> Stamps beyond row {total_rows} will have empty fields.")
+                        proceed = input("Do you want to continue? (yes/no): ")
+                        if proceed.lower() != 'yes':
+                            print(">>> Operation cancelled by user")
+                            return
+                    break
+                else:
+                    print("Please enter a positive number.")
+            except ValueError:
+                print("Please enter a valid number.")
+        
+        print(f">>> Will generate {num_stamps} stamps...")
+        
+        # Get stamp duty type and article choice once for all stamps
         for stamp_num in range(num_stamps):
             print(f"\n>>> Generating stamp {stamp_num + 1} of {num_stamps}")
             
@@ -202,10 +219,8 @@ def generate_stamp(driver):
             next_button.click()
             print(">>> Clicked Next button")
 
-            print("\n>>> Reading data from Excel...")
-            df = read_stamp_data()
-
-            if df is not None:
+            # For form filling, use the already loaded df
+            if stamp_num < total_rows:
                 try:
                     # Define all mandatory fields with their IDs
                     mandatory_fields = {
@@ -219,22 +234,16 @@ def generate_stamp(driver):
                         "Stamp_Duty_Amount": "TextField28Mand"
                     }
 
-                    # Check if we have enough rows in Excel
-                    if stamp_num < len(df):
-                        row = df.iloc[stamp_num]  # Get row based on current stamp number
-                        print(f"\n>>> Using data from Excel row {stamp_num + 1}")
-                        row_data = {}
-                        for col_name in mandatory_fields.keys():
-                            value = row.get(col_name, "")
-                            # Handle NaN values
-                            if pd.isna(value):
-                                value = ""
-                            row_data[col_name] = str(value).strip()
-                    else:
-                        print(f"\n>>> Warning: No data found in Excel for stamp {stamp_num + 1}")
-                        row_data = {col_name: "" for col_name in mandatory_fields.keys()}
+                    row = df.iloc[stamp_num]
+                    print(f"\n>>> Using data from Excel row {stamp_num + 1}")
+                    row_data = {}
+                    for col_name in mandatory_fields.keys():
+                        value = row.get(col_name, "")
+                        if pd.isna(value):
+                            value = ""
+                        row_data[col_name] = str(value).strip()
 
-                    # Fill all mandatory fields (with data or blank)
+                    # Fill all mandatory fields
                     for field_name, element_id in mandatory_fields.items():
                         try:
                             field = WebDriverWait(driver, 10).until(
@@ -245,7 +254,6 @@ def generate_stamp(driver):
                             field.clear()
                             time.sleep(0.01)
                             
-                            # Use Excel data if available
                             value = row_data.get(field_name, "")
                             field.send_keys(value)
                             
@@ -255,29 +263,52 @@ def generate_stamp(driver):
                                 print(f">>> Left {field_name} blank")
                         except Exception as e:
                             print(f">>> Failed to handle {field_name}: {str(e)}")
-
-                    try:
-                        save_button = WebDriverWait(driver, 10).until(
-                            EC.element_to_be_clickable((By.NAME, "pSave"))
-                        )
-                        driver.execute_script("arguments[0].scrollIntoView(true);", save_button)
-                        time.sleep(0.01)
-                        save_button.click()
-                        print(">>> Clicked Save button")
-                        handle_all_alerts(driver)  # Automatically handle up to 3 alerts
-                        
-                        if stamp_num < num_stamps - 1:  # If not the last stamp
-                            print(">>> Preparing for next stamp...")
-                        else:
-                            print(">>> All stamps generated successfully!")
-                            
-                    except Exception as e:
-                        print(f">>> Failed to click Save button: {str(e)}")
-
                 except Exception as e:
                     print(f">>> Error in filling form: {str(e)}")
             else:
-                print(">>> No data found in Excel file or error reading file")
+                print(f"\n>>> No data available in Excel for stamp {stamp_num + 1}")
+                print(">>> All fields will be left blank")
+                # Fill blank fields
+                mandatory_fields = {
+                    "Purchased_by": "TextField6Mand",
+                    "Description": "TextArea8Mand",
+                    "First_Party": "TextField11Mand",
+                    "Second_Party": "TextField18Mand",
+                    "Stamp_Duty_Paid_By": "TextField24Mand",
+                    "First_Party_Mobile": "fpMobNo",
+                    "Second_Party_Mobile": "spMobNo",
+                    "Stamp_Duty_Amount": "TextField28Mand"
+                }
+                
+                for field_name, element_id in mandatory_fields.items():
+                    try:
+                        field = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.ID, element_id))
+                        )
+                        driver.execute_script("arguments[0].scrollIntoView(true);", field)
+                        time.sleep(0.01)
+                        field.clear()
+                        print(f">>> Left {field_name} blank")
+                    except Exception as e:
+                        print(f">>> Failed to handle {field_name}: {str(e)}")
+
+            try:
+                save_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.NAME, "pSave"))
+                )
+                driver.execute_script("arguments[0].scrollIntoView(true);", save_button)
+                time.sleep(0.01)
+                save_button.click()
+                print(">>> Clicked Save button")
+                handle_all_alerts(driver)
+                
+                if stamp_num < num_stamps - 1:
+                    print(">>> Preparing for next stamp...")
+                else:
+                    print(">>> All stamps generated successfully!")
+                    
+            except Exception as e:
+                print(f">>> Failed to click Save button: {str(e)}")
 
     except Exception as e:
         print(f">>> Error during e-Stamp generation: {str(e)}")
