@@ -29,19 +29,6 @@ def print_stamp(driver):
         num_stamps = int(input("How many stamps do you want to print? "))
         print(f">>> You chose to print {num_stamps} stamps.")
 
-        # last_serial = load_last_serial()
-        # if last_serial:
-        #     use_last = input(f"Last used serial number was {last_serial}. Use next number? (y/n): ").lower()
-        #     if use_last == 'y':
-        #         start_serial = str(int(last_serial) + 1).zfill(5)
-        #         print(f">>> Using next serial number: {start_serial}")
-        #     else:
-        #         start_serial = input("Enter the last 5-digit serial number: ")
-        #         print(f">>> User entered serial number: {start_serial}")
-        # else:
-        #     start_serial = input("Enter the last 5-digit serial number: ")
-        #     print(f">>> No previous serial found. Starting with: {start_serial}")
-
         last_serial = load_last_serial()
         if last_serial:
             next_serial = str(int(last_serial) + 1).zfill(5)
@@ -102,34 +89,71 @@ def print_stamp(driver):
             alert = WebDriverWait(driver, 5).until(EC.alert_is_present())
             alert.accept()
 
-            # print(">>> Clicking on 'OK' button after alert...")
-            # ok_button = WebDriverWait(driver, 5).until(
-            #     EC.element_to_be_clickable((By.NAME, "ackButton"))
-            # )
-            # ok_button.click()
-
             print(">>> Clicking on 'Final Print' button...")
             final_print_button = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.ID, "printBtn"))
             )
             final_print_button.click()
 
-            print(">>> Waiting for system to populate dynamic dropdown...")
-            WebDriverWait(driver, 10).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, "#selectSl option")) > 1
+            print(">>> Entering serial number on form...")
+            serial_input = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, "serialNo"))
             )
+            serial_input.clear()
+            serial_input.send_keys(str(current_serial).zfill(5))
 
-            select_element = driver.find_element(By.ID, "selectSl")
-            options = select_element.find_elements(By.TAG_NAME, "option")
+            print(">>> Waiting for system to populate certificate details...")
 
-            for option in options:
-                value = option.get_attribute("value")
-                if value and "=" in value:
-                    actual_serial = value.split("=")[0]
-                    print(f"🖨️ Dynamic Serial Detected from Website: {actual_serial}")
-                    break
+            # Wait for the <select> to have at least one valid option (value not empty, not disabled)
+            try:
+                WebDriverWait(driver, 15).until(
+                    lambda d: any(
+                        option.get_attribute("value") not in [None, "", "Select your option"]
+                        and option.is_enabled()
+                        for option in d.find_elements(By.CSS_SELECTOR, "#selectSl option")
+                    )
+                )
+            except Exception:
+                print("⚠️ Timeout waiting for valid option in selectSl dropdown.")
 
-            # ow click save
+            # Get stationery serial number from valid option
+            stationery_serial = ""
+            try:
+                select_elem = driver.find_element(By.ID, "selectSl")
+                options = select_elem.find_elements(By.TAG_NAME, "option")
+                # Find first valid option with a meaningful value
+                valid_option = next(
+                    (opt for opt in options if opt.get_attribute("value") not in [None, "", "Select your option"] and opt.is_enabled()),
+                    None
+                )
+                if valid_option:
+                    raw_value = valid_option.get_attribute("value")
+                    if raw_value and "=" in raw_value:
+                        stationery_serial = raw_value.split("=")[0].strip()
+            except Exception as e:
+                print(f"Could not read stationery serial: {e}")
+
+            # Get certificate ID from page
+            certificate_id = ""
+            try:
+                cert_elem = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//td/font[contains(@class, 'txt-body') and starts-with(text(), 'IN-GJ')]"))
+                )
+                certificate_id = cert_elem.text.strip()
+            except Exception as e:
+                print(f"⚠️ Could not read certificate ID: {e}")
+
+            # Print results
+            if certificate_id:
+                print(f"Certificate ID: {certificate_id}")
+            else:
+                print("Certificate ID not found.")
+
+            if stationery_serial:
+                print(f"Stationery Serial Number : {stationery_serial}\n")
+            else:
+                print("Stationery Serial not found.\n")
+
             print(">>> Clicking 'Save' to store the serial number...")
             save_button = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.NAME, "Save"))
